@@ -746,8 +746,8 @@ static void gyroscope_attitude_integration(void)
 
     /* Wrap using mod_double */
     mod_double(&phi, phi, 2.0 * MATH_PI);
-    mod_double(&theta, theta, 2.0 * MATH_PI);
-    mod_double(&psi, psi, 2.0 * MATH_PI);
+    // mod_double(&theta, theta, 2.0 * MATH_PI);
+    // mod_double(&psi, psi, 2.0 * MATH_PI);
 
     /* Store integrated attitude for DAP/telemetry */
     systemState.attitudeTelemetryData.attitude_rad.x = phi;
@@ -841,49 +841,60 @@ static void process_navigation(double dt_s)
 
     // add a shared state to save phi, theta , psi TO BE SAVED IN csv
 
-    /* ===== MAGNETOMETER ATTITUDE ESTIMATION - 3 CONSECUTIVE CYCLES CHECK ===== */
-    /* Check 1: Rate condition for magnetometer (rate <= 5 rps and gyro integration not active) */
-    if (rate <= 5.0 && !systemState.navigationState.mag_3_cycles_confirmed)
+    /* ===== GYROSCOPE ATTITUDE INTEGRATION LOGIC ===== */
+    if (gyro_3_cycles_confirmed)
     {
-        magEstOkFlag = true;
-        magcount++;
+        /* Gyro confirmed - integrate angular rates every cycle */
+        gyroscope_attitude_integration();
+        gyroattitude = true;
     }
-    else
+    else if (rate <= 2.0)
     {
-        /* Reset counter if condition not met */
-        magcount = 0;
-        magEstOkFlag = false;
-    }
-
-    /* Check 2: If rate condition met and gyro attitude not active, check for 3 consecutive cycles */
-    if (magEstOkFlag && !gyroattitude && magcount >= 3)
-    {
-        MAG_3_CYCLES_CONFIRMED = true;
-        systemState.navigationState.mag_3_cycles_confirmed = true;
-        magnetometer_attitude_estimation(); /* No dt_s argument needed */
-    }
-
-    /* ===== GYROSCOPE ATTITUDE INTEGRATION - 3 CONSECUTIVE CYCLES CHECK ===== */
-    /* Check 1: Rate condition for gyroscope (rate <= 2 rps) */
-    if (rate <= 2.0 && !gyro_3_cycles_confirmed)
-    {
+        /* Rate condition met for gyroscope - check for 3 consecutive cycles */
         gyro_rate_condition_met = true;
         gyrocount++;
+        if (gyrocount >= 3)
+        {
+            gyro_3_cycles_confirmed = true;
+            systemState.navigationState.gyro_3_cycles_confirmed = true;
+            gyroscope_attitude_integration();
+            gyroattitude = true;
+        }
     }
     else
     {
-        /* Reset counter if condition not met */
+        /* Reset gyro counter if rate condition not met */
         gyrocount = 0;
         gyro_rate_condition_met = false;
     }
 
-    /* Check 2: If rate condition met, check for 3 consecutive cycles */
-    if (gyro_rate_condition_met && gyrocount >= 3)
+    /* ===== MAGNETOMETER ATTITUDE ESTIMATION LOGIC ===== */
+    /* Only perform magnetometer estimation if gyroscope integration is not active */
+    if (!gyroattitude)
     {
-        gyro_3_cycles_confirmed = true;
-        systemState.navigationState.gyro_3_cycles_confirmed = true;
-        gyroscope_attitude_integration();
-        gyroattitude = true;
+        if (MAG_3_CYCLES_CONFIRMED)
+        {
+            /* Magnetometer confirmed - estimate attitude every cycle until gyro takes over */
+            magnetometer_attitude_estimation();
+        }
+        else if (rate <= 5.0)
+        {
+            /* Rate condition met for magnetometer - check for 3 consecutive cycles */
+            magEstOkFlag = true;
+            magcount++;
+            if (magcount >= 3)
+            {
+                MAG_3_CYCLES_CONFIRMED = true;
+                systemState.navigationState.mag_3_cycles_confirmed = true;
+                magnetometer_attitude_estimation();
+            }
+        }
+        else
+        {
+            /* Reset mag counter if rate condition not met */
+            magcount = 0;
+            magEstOkFlag = false;
+        }
     }
 
     /* If neither magnetometer nor gyroscope attitude estimation is active, */
@@ -1646,11 +1657,11 @@ static void execute_dap(double dt_s)
 
     /* Execute DAP algorithm - canard control is enabled if we reach here */
     DAPOutput_t dapOutput;
-    DAPOutput_t deltar = {0.0f, 0.0f, 0.0f, 0.0f};
-    PYOutput_t deltap = {0.0f, 0.0f};
-    PYOutput_t deltay = {0.0f, 0.0f};
+    DAPOutput_t deltar = {0.0, 0.0, 0.0, 0.0};
+    PYOutput_t deltap = {0.0, 0.0};
+    PYOutput_t deltay = {0.0, 0.0};
 
-    if (rollRate != 0.0)
+    if (rollRate > 0.01)
     {
         /* Roll rate is non-zero - use roll control */
         deltar = compute_delta_roll_command(rollAngle, rollRate, dapParams, dt_s);
@@ -1711,67 +1722,67 @@ Status_t set_obc_reset(bool isActive)
         load_pefcs_defaults();
 
         /* Initialize accelerometer data processing */
-        systemState.accelerometerData.accel_current.x = 0.0;
-        systemState.accelerometerData.accel_current.y = 0.0;
-        systemState.accelerometerData.accel_current.z = 0.0;
-        systemState.accelerometerData.accel_previous.x = 0.0;
-        systemState.accelerometerData.accel_previous.y = 0.0;
-        systemState.accelerometerData.accel_previous.z = 0.0;
-        systemState.accelerometerData.accel_obc.x = 0.0;
-        systemState.accelerometerData.accel_obc.y = 0.0;
-        systemState.accelerometerData.accel_obc.z = 0.0;
-        systemState.accelerometerData.accel_x_health_ok = false;
-        systemState.accelerometerData.accel_y_health_ok = false;
-        systemState.accelerometerData.accel_z_health_ok = false;
+        // systemState.accelerometerData.accel_current.x = 0.0;
+        // systemState.accelerometerData.accel_current.y = 0.0;
+        // systemState.accelerometerData.accel_current.z = 0.0;
+        // systemState.accelerometerData.accel_previous.x = 0.0;
+        // systemState.accelerometerData.accel_previous.y = 0.0;
+        // systemState.accelerometerData.accel_previous.z = 0.0;
+        // systemState.accelerometerData.accel_obc.x = 0.0;
+        // systemState.accelerometerData.accel_obc.y = 0.0;
+        // systemState.accelerometerData.accel_obc.z = 0.0;
+        // systemState.accelerometerData.accel_x_health_ok = false;
+        // systemState.accelerometerData.accel_y_health_ok = false;
+        // systemState.accelerometerData.accel_z_health_ok = false;
 
         /* Initialize gyroscope data processing */
-        systemState.gyroscopeData.gyro_current.x = 0.0;
-        systemState.gyroscopeData.gyro_current.y = 0.0;
-        systemState.gyroscopeData.gyro_current.z = 0.0;
-        systemState.gyroscopeData.gyro_previous.x = 0.0;
-        systemState.gyroscopeData.gyro_previous.y = 0.0;
-        systemState.gyroscopeData.gyro_previous.z = 0.0;
-        systemState.gyroscopeData.gyro_obc.x = 0.0;
-        systemState.gyroscopeData.gyro_obc.y = 0.0;
-        systemState.gyroscopeData.gyro_obc.z = 0.0;
-        systemState.gyroscopeData.gyro_x_health_ok = false;
-        systemState.gyroscopeData.gyro_y_health_ok = false;
-        systemState.gyroscopeData.gyro_z_health_ok = false;
+        // systemState.gyroscopeData.gyro_current.x = 0.0;
+        // systemState.gyroscopeData.gyro_current.y = 0.0;
+        // systemState.gyroscopeData.gyro_current.z = 0.0;
+        // systemState.gyroscopeData.gyro_previous.x = 0.0;
+        // systemState.gyroscopeData.gyro_previous.y = 0.0;
+        // systemState.gyroscopeData.gyro_previous.z = 0.0;
+        // systemState.gyroscopeData.gyro_obc.x = 0.0;
+        // systemState.gyroscopeData.gyro_obc.y = 0.0;
+        // systemState.gyroscopeData.gyro_obc.z = 0.0;
+        // systemState.gyroscopeData.gyro_x_health_ok = false;
+        // systemState.gyroscopeData.gyro_y_health_ok = false;
+        // systemState.gyroscopeData.gyro_z_health_ok = false;
 
         /* Initialize magnetometer data processing */
-        systemState.magnetometerData.mag_current.x = 0.0;
-        systemState.magnetometerData.mag_current.y = 0.0;
-        systemState.magnetometerData.mag_current.z = 0.0;
-        systemState.magnetometerData.mag_previous.x = 0.0;
-        systemState.magnetometerData.mag_previous.y = 0.0;
-        systemState.magnetometerData.mag_previous.z = 0.0;
-        systemState.magnetometerData.mag_obc.x = 0.0;
-        systemState.magnetometerData.mag_obc.y = 0.0;
-        systemState.magnetometerData.mag_obc.z = 0.0;
-        systemState.magnetometerData.mag_health_ok = false;
+        // systemState.magnetometerData.mag_current.x = 0.0;
+        // systemState.magnetometerData.mag_current.y = 0.0;
+        // systemState.magnetometerData.mag_current.z = 0.0;
+        // systemState.magnetometerData.mag_previous.x = 0.0;
+        // systemState.magnetometerData.mag_previous.y = 0.0;
+        // systemState.magnetometerData.mag_previous.z = 0.0;
+        // systemState.magnetometerData.mag_obc.x = 0.0;
+        // systemState.magnetometerData.mag_obc.y = 0.0;
+        // systemState.magnetometerData.mag_obc.z = 0.0;
+        // systemState.magnetometerData.mag_health_ok = false;
 
         /* Initialize incremental velocity data processing */
-        systemState.incrementalVelocityData.delta_v_x_raw = 0;
-        systemState.incrementalVelocityData.delta_v_y_raw = 0;
-        systemState.incrementalVelocityData.delta_v_z_raw = 0;
-        systemState.incrementalVelocityData.delta_v_obc.x = 0.0;
-        systemState.incrementalVelocityData.delta_v_obc.y = 0.0;
-        systemState.incrementalVelocityData.delta_v_obc.z = 0.0;
-        systemState.incrementalVelocityData.delta_v_converted.x = 0.0;
-        systemState.incrementalVelocityData.delta_v_converted.y = 0.0;
-        systemState.incrementalVelocityData.delta_v_converted.z = 0.0;
+        // systemState.incrementalVelocityData.delta_v_x_raw = 0;
+        // systemState.incrementalVelocityData.delta_v_y_raw = 0;
+        // systemState.incrementalVelocityData.delta_v_z_raw = 0;
+        // systemState.incrementalVelocityData.delta_v_obc.x = 0.0;
+        // systemState.incrementalVelocityData.delta_v_obc.y = 0.0;
+        // systemState.incrementalVelocityData.delta_v_obc.z = 0.0;
+        // systemState.incrementalVelocityData.delta_v_converted.x = 0.0;
+        // systemState.incrementalVelocityData.delta_v_converted.y = 0.0;
+        // systemState.incrementalVelocityData.delta_v_converted.z = 0.0;
 
         /* Initialize incremental angle data processing */
-        systemState.incrementalAngleData.delta_theta_x_raw = 0;
-        systemState.incrementalAngleData.delta_theta_y_raw = 0;
-        systemState.incrementalAngleData.delta_theta_z_raw = 0;
-        systemState.incrementalAngleData.delta_theta_obc.x = 0.0;
-        systemState.incrementalAngleData.delta_theta_obc.y = 0.0;
-        systemState.incrementalAngleData.delta_theta_obc.z = 0.0;
+        // systemState.incrementalAngleData.delta_theta_x_raw = 0;
+        // systemState.incrementalAngleData.delta_theta_y_raw = 0;
+        // systemState.incrementalAngleData.delta_theta_z_raw = 0;
+        // systemState.incrementalAngleData.delta_theta_obc.x = 0.0;
+        // systemState.incrementalAngleData.delta_theta_obc.y = 0.0;
+        // systemState.incrementalAngleData.delta_theta_obc.z = 0.0;
 
         /* Initialize navigation confirmation flags */
-        systemState.navigationState.accel_offset.y = 0.0f; /* Set actual calibration values */
-        systemState.navigationState.accel_offset.z = 0.0f; /* Set actual calibration values */
+        // systemState.navigationState.accel_offset.y = 0.0; /* Set actual calibration values */
+        // systemState.navigationState.accel_offset.z = 0.0; /* Set actual calibration values */
 
         /* Initialize navigation confirmation flags */
         systemState.navigationState.mag_3_cycles_confirmed = false;
@@ -1783,21 +1794,21 @@ Status_t set_obc_reset(bool isActive)
         gyrocount = 0;
         gyro_3_cycles_confirmed = false;
         gyroattitude = false;
-        rate = 0.0f;
+        rate = 0.0;
 
         /* Initialize magnetic field reference in NED frame (from checkout system) */
         /* Default values match previous hardcoded values: mv = -118.196..., me = -7.420... */
         /* For default: mag_ref_ned = [x, y, z] where after transformation: y = mv, z = me */
         /* With matrix [1,0,0; 0,0,-1; 0,1,0], we need: y = -z_ned = mv, z = y_ned = me */
         /* So: z_ned = -mv = 118.196..., y_ned = me = -7.420... */
-        systemState.navigationState.mag_ref_ned.x = 0.0f; /* Will be set by checkout system */
-        systemState.navigationState.mag_ref_ned.y = 0.0f; /* Default: matches me */
-        systemState.navigationState.mag_ref_ned.z = 0.0f; /* Default: matches -mv */
+        systemState.navigationState.mag_ref_ned.x = 0.0; /* Will be set by checkout system */
+        systemState.navigationState.mag_ref_ned.y = 0.0; /* Default: matches me */
+        systemState.navigationState.mag_ref_ned.z = 0.0; /* Default: matches -mv */
 
         /* Initialize DAP state variables */
-        rollIntegrator = 0.0f;    /* Reset roll integrator */
-        previousPitchrate = 0.0f; /* Reset previous pitch rate */
-        previousYawrate = 0.0f;   /* Reset previous yaw rate */
+        rollIntegrator = 0.0;    /* Reset roll integrator */
+        previousPitchrate = 0.0; /* Reset previous pitch rate */
+        previousYawrate = 0.0;   /* Reset previous yaw rate */
     }
 
     return SUCCESS;

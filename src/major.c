@@ -363,7 +363,7 @@ static void ecef_to_local_using_axes(Vector3_t *result, const Vector3_t *r_ecef,
     result->z = dot_z;
 }
 
-//Eventhough the variables are named ECEF, they are treated as ECI (Inertial) frame by guidance logic. 
+//Eventhough the variables are named ECEF, they are treated as ECI (Inertial) frame by guidance logic.
 //This is a known naming convention idiosyncrasy. Algorithms assume ECI inputs. - Ananthu Dev - Flight Software Engineer / Project Engineer
 void calculate_guidance_acceleration(Vector3_t *accel_body,
                                      const Vector3_t *position_ecef, const Vector3_t *velocity_ecef,
@@ -563,12 +563,12 @@ void calculate_guidance_acceleration(Vector3_t *accel_body,
     vector3_cross(&l_p, &k_l, &e_p);
 
     /* IAC acceleration components */
-    double a_p_scalar = ((-GUID_NAVIGATION_GAIN_N * (v * v) * sinf(sigma)) / r);
+    double a_p_scalar = ((-GUID_NAVIGATION_GAIN_N * (v * v) * sin(sigma)) / r);
     Vector3_t cross_l_f_e_p;
     vector3_cross(&cross_l_f_e_p, &l_f, &e_p);
     double dot_cross_l_p;
     vector3_dot(&dot_cross_l_p, &cross_l_f_e_p, &l_p);
-    double a_i_lm = (((GUID_NAVIGATION_GAIN_N - 1.0f) * GUID_PARAM_K * f_sigma_not * v * h_delta) / t_go) * dot_cross_l_p;
+    double a_i_lm = (((GUID_NAVIGATION_GAIN_N - 1.0) * GUID_PARAM_K * f_sigma_not * v * h_delta) / t_go) * dot_cross_l_p;
 
     double sin_eta = sin(eta);
     if (fabs(sin_eta) < GUID_EPSILON)

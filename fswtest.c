@@ -82,6 +82,14 @@ void inject_sensor_data(
     systemState.magnetometerData.mag_current.y = bmy;
     systemState.magnetometerData.mag_current.z = bmz;
 
+    // /* Diagnostic Check in fswtest.c */
+    // systemState.magnetometerData.mag_current.x = bmx;
+    // printf("DEBUG: Just assigned mag_x = %f\n", systemState.magnetometerData.mag_current.x);
+
+    // minor_cycle();
+
+    // printf("DEBUG: After minor_cycle mag_x = %f\n", systemState.magnetometerData.mag_current.x);
+
     /* Incremental Velocity - m/s */
     systemState.incrementalVelocityData.delta_v_converted.x = deltaVx;
     systemState.incrementalVelocityData.delta_v_converted.y = deltaVy;
@@ -129,6 +137,12 @@ void log_outputs(FILE *output_file, double mission_time,
             systemState.navigationState.attitude_e.pitch_rad,
             systemState.navigationState.attitude_e.yaw_rad);
 
+    /* Magnetometer inputs (mG) - Directly from CSV */
+    fprintf(output_file, "%.6f,%.6f,%.6f,",
+            systemState.magnetometerData.mag_current.x,
+            systemState.magnetometerData.mag_current.y,
+            systemState.magnetometerData.mag_current.z);
+
     /* Angular rates (rad/s) - store for roll rate calculation */
     double gyro_p_rad_s = systemState.angularRates.x;
     double gyro_q_rad_s = systemState.angularRates.y;
@@ -141,6 +155,11 @@ void log_outputs(FILE *output_file, double mission_time,
 
     /* Roll rate in RPS (computed by minor_cycle) */
     fprintf(output_file, "%.6f,", systemState.rollRateFp);
+
+    /* Navigation Status Flags */
+    fprintf(output_file, "%d,%d,",
+            systemState.navigationState.mag_3_cycles_confirmed,
+            systemState.navigationState.gyro_3_cycles_confirmed);
 
     /* Sequencer outputs - Phase flags and timing (cycles) */
     fprintf(output_file, "%d,%d,%d,%d,",
@@ -176,7 +195,9 @@ void print_output_header(FILE *output_file)
     fprintf(output_file, "guid_ax,guid_ay,guid_az,tgo,");
     fprintf(output_file, "dap_c12,dap_c3,dap_c6,dap_c9,");
     fprintf(output_file, "nav_roll,nav_pitch,nav_yaw,");
+    fprintf(output_file, "mag_in_x,mag_in_y,mag_in_z,");
     fprintf(output_file, "gyro_p,gyro_q,gyro_r,roll_rate_rps,");
+    fprintf(output_file, "mag_ok,gyro_ok,");
     fprintf(output_file, "T0,T1,T2,T3,");
     fprintf(output_file, "fsa_flag,canard_deploy,canard_control,guid_start,proximity_flag,");
     fprintf(output_file, "main_cycles,t1_cycles,t2_cycles,t3_cycles");
