@@ -42,6 +42,11 @@ static double guidance_psi_f = 0.0; /* Desired impact azimuth angle (rad) */
 /* External GNSS lock flag from hardware team */
 volatile bool gnss_lock;
 
+/* Stored Local Frame Axes (Computed once at initialization) */
+static Vector3_t local_x_axis = {0.0, 0.0, 0.0};
+static Vector3_t local_y_axis = {0.0, 0.0, 0.0};
+static Vector3_t local_z_axis = {0.0, 0.0, 0.0};
+
 /* Forward declarations for static helper functions */
 static void build_local_axes_from_ecef(Vector3_t *x_axis, Vector3_t *y_axis, Vector3_t *z_axis,
                                        const Vector3_t *origin_ecef, const Vector3_t *target_ecef);
@@ -53,32 +58,35 @@ static void local_to_ecef_using_axes(Vector3_t *result, const Vector3_t *v_local
 /**
  * @brief Process GNSS data with fail-safe handling
  *
- * This function processes GNSS data from hardware buffer with fail-safe
- * mechanism. If GNSS lock is lost, previous valid data is used.
+ * In test mode, CSV values are injected directly via inject_sensor_data().
+ * This function simply marks the data as valid.
+ * In flight mode, hardware team will implement GNSS lock checks here.
  */
 void process_gnss_data(void)
 {
-    /* Check GNSS lock status from hardware */
+    /* In test mode, bypass all health checks - data is injected from CSV */
+    if (systemState.testMode)
+    {
+        /* Copy injected data from systemState to gnss globals */
+        gnss_position_ecef.x_m = systemState.position_ecef.x;
+        gnss_position_ecef.y_m = systemState.position_ecef.y;
+        gnss_position_ecef.z_m = systemState.position_ecef.z;
+        gnss_position_ecef.valid = true;
+
+        gnss_velocity_ecef.vx_ms = systemState.velocity_ecef.x;
+        gnss_velocity_ecef.vy_ms = systemState.velocity_ecef.y;
+        gnss_velocity_ecef.vz_ms = systemState.velocity_ecef.z;
+        gnss_velocity_ecef.valid = true;
+        return;
+    }
+
+    /* Flight mode - check GNSS lock status from hardware */
     if (gnss_lock)
     {
         /* GNSS data is valid - hardware team will parse and extract ECEF data */
-        /* TODO: Hardware team has to  replace this with actual parsing */
-        /* Example: parse_gnss_buffer_to_ecef(&gnss_position_ecef, &gnss_velocity_ecef); */
+        /* TODO: Hardware team implements parsing from gnssDataBuffer */
 
-        /* Placeholder: Set some test values (hardware team will replace) */
-        // raheese gnss in ecef frameil x,y,z ivide kettanam...ithe position
-        /* COMMENTED OUT - Hardware team to implement
-        convert_ecef_position_raw_to_double(&gnss_position_ecef.x_m,
-                                            &gnss_position_ecef.y_m,
-                                            &gnss_position_ecef.z_m,
-                                            gnssDataBuffer, 39, 43, 47);
-
-        convert_ecef_velocity_raw_to_double(&gnss_velocity_ecef.vx_ms,
-                                            &gnss_velocity_ecef.vy_ms,
-                                            &gnss_velocity_ecef.vz_ms,
-                                            gnssDataBuffer, 51, 55, 59);
-        */
-
+        gnss_position_ecef.valid = true;
         gnss_velocity_ecef.valid = true;
 
         /* Update fail-safe variables with current valid data */
@@ -103,7 +111,6 @@ void process_gnss_data(void)
             /* Use previous valid data */
             gnss_position_ecef = previous_gnss_position;
             gnss_velocity_ecef = previous_gnss_velocity;
-            /* Keep valid flags as true since we're using valid previous data */
         }
         else
         {
@@ -145,17 +152,19 @@ void process_gnss_ecef_data(void)
     ecef_velocity.z = gnss_velocity_ecef.vz_ms;
 
     /* Build local frame axes from ECEF vectors (launch point and target already in ECEF) */
-    Vector3_t x_axis, y_axis, z_axis;
-    build_local_axes_from_ecef(&x_axis, &y_axis, &z_axis, &mission_launch_point_ecef, &mission_target_ecef);
+    /* Use pre-computed Local Frame Axes (Geodetic Normal) */
+    Vector3_t *x_axis = &local_x_axis;
+    Vector3_t *y_axis = &local_y_axis;
+    Vector3_t *z_axis = &local_z_axis;
 
     /* Convert ECEF position to Local frame */
-    ecef_to_local_using_axes(&systemState.positionLocal, &ecef_position, &mission_launch_point_ecef, &x_axis, &y_axis, &z_axis);
+    ecef_to_local_using_axes(&systemState.positionLocal, &ecef_position, &mission_launch_point_ecef, x_axis, y_axis, z_axis);
 
     /* Convert ECEF velocity to Local frame */
     double dot_x, dot_y, dot_z;
-    vector3_dot(&dot_x, &x_axis, &ecef_velocity);
-    vector3_dot(&dot_y, &y_axis, &ecef_velocity);
-    vector3_dot(&dot_z, &z_axis, &ecef_velocity);
+    vector3_dot(&dot_x, x_axis, &ecef_velocity);
+    vector3_dot(&dot_y, y_axis, &ecef_velocity);
+    vector3_dot(&dot_z, z_axis, &ecef_velocity);
     systemState.velocityLocal.x = dot_x;
     systemState.velocityLocal.y = dot_y;
     systemState.velocityLocal.z = dot_z;
@@ -272,6 +281,7 @@ void set_guidance_impact_angles(double theta_f_rad, double psi_f_rad)
  *
  * Converts geodetic coordinates from PEFCS to ECEF and initializes
  * mission target, launch point, and impact angles.
+ * Also pre-computes the Local Frame axes using Geodetic Normal.
  */
 void guidance_init(void)
 {
@@ -300,6 +310,29 @@ void guidance_init(void)
     deg_to_rad(&theta_f_rad, PEFCS_IMPACT_THETA_F_DEG);
     deg_to_rad(&psi_f_rad, PEFCS_IMPACT_PSI_F_DEG);
     set_guidance_impact_angles(theta_f_rad, psi_f_rad);
+
+    /* Build Local Frame Axes using Geodetic Normal (matches reference implementation) */
+    /* Note: We use the function from math_utils.c (via header) which handles geodetic perturbation correctly */
+    /* We cannot verify build_local_axes directly here as it is static in math_utils.c, 
+       so we manually replicate the "build_local_axes" logic found in reference */
+
+    Vector3_t perturb_ecef;
+    GeodeticPos_t perturb_origin = origin_geodetic;
+    perturb_origin.alt_m += 1.0; /* +1 m for surface normal */
+
+    geodetic_to_ecef(&perturb_ecef, &perturb_origin);
+
+    /* z axis - surface normal */
+    vector3_subtract(&local_z_axis, &perturb_ecef, &origin_ecef);
+    vector3_normalize(&local_z_axis, &local_z_axis);
+
+    /* x axis - from launch to target */
+    vector3_subtract(&local_x_axis, &target_ecef, &origin_ecef);
+    vector3_normalize(&local_x_axis, &local_x_axis);
+
+    /* y axis - completes right-handed system */
+    vector3_cross(&local_y_axis, &local_z_axis, &local_x_axis);
+    vector3_normalize(&local_y_axis, &local_y_axis);
 }
 
 /* ===== GUIDANCE ALGORITHM IMPLEMENTATION ===== */
@@ -308,42 +341,8 @@ void guidance_init(void)
  * @brief Calculate guidance acceleration command
  *
  * Implements Proportional Navigation (PN) + Impact Angle Control (IAC)
- * Based on test module guidance_fixed/guidance.c
+ * Based on test module guidance_updated_clamp/guidance.c
  */
-/**
-  * @brief Build local frame axes from ECEF vectors
-  * 
-  * Uses geodetic normal perturbation method for Z-axis calculation,
-  * matching test/guidance_updated_clamp/coordinate_transforms.c
-  * This provides the true surface normal perpendicular to the WGS84 ellipsoid.
-  */
-static void build_local_axes_from_ecef(Vector3_t *x_axis, Vector3_t *y_axis, Vector3_t *z_axis,
-                                       const Vector3_t *origin_ecef, const Vector3_t *target_ecef)
-{
-    /* Calculate perturbed origin position (+1m altitude) for geodetic normal */
-    /* This approximates the local vertical direction perpendicular to ellipsoid */
-    double origin_mag;
-    vector3_magnitude(&origin_mag, origin_ecef);
-
-    /* Create a perturbed point 1m higher along the geocentric radius */
-    /* (Note: This is a simplified approximation. For exact geodetic normal,
-     * we would need to convert ECEF->Geodetic, perturb alt, then convert back) */
-    double scale_factor = (origin_mag + 1.0) / origin_mag;
-    Vector3_t perturb_ecef;
-    vector3_scale(&perturb_ecef, origin_ecef, scale_factor);
-
-    /* z axis - surface normal (from origin to perturbed point) */
-    vector3_subtract(z_axis, &perturb_ecef, origin_ecef);
-    vector3_normalize(z_axis, z_axis);
-
-    /* x axis - from origin to target */
-    vector3_subtract(x_axis, target_ecef, origin_ecef);
-    vector3_normalize(x_axis, x_axis);
-
-    /* y axis - completes right-handed system */
-    vector3_cross(y_axis, z_axis, x_axis);
-    vector3_normalize(y_axis, y_axis);
-}
 
 /**
  * @brief Convert ECEF to local frame using pre-built axes
@@ -364,43 +363,45 @@ static void ecef_to_local_using_axes(Vector3_t *result, const Vector3_t *r_ecef,
     result->z = dot_z;
 }
 
-/**
- * @brief Convert local frame to ECEF using pre-built axes
- */
-static void local_to_ecef_using_axes(Vector3_t *result, const Vector3_t *v_local,
-                                     const Vector3_t *x_axis, const Vector3_t *y_axis, const Vector3_t *z_axis)
-{
-    /* Matrix multiplication R_local->ecef (basis vectors as columns) */
-    result->x = x_axis->x * v_local->x + y_axis->x * v_local->y + z_axis->x * v_local->z;
-    result->y = x_axis->y * v_local->x + y_axis->y * v_local->y + z_axis->y * v_local->z;
-    result->z = x_axis->z * v_local->x + y_axis->z * v_local->y + z_axis->z * v_local->z;
-}
-
+//Eventhough the variables are named ECEF, they are treated as ECI (Inertial) frame by guidance logic. 
+//This is a known naming convention idiosyncrasy. Algorithms assume ECI inputs. - Ananthu Dev - Flight Software Engineer / Project Engineer
 void calculate_guidance_acceleration(Vector3_t *accel_body,
                                      const Vector3_t *position_ecef, const Vector3_t *velocity_ecef,
                                      const Vector3_t *origin_ecef, const Vector3_t *target_ecef,
                                      double theta_f, double psi_f, double theta, double psi, double phi)
 {
-    /* Build local frame axes from ECEF vectors (matching test guidance.c) */
-    Vector3_t x_axis, y_axis, z_axis;
-    build_local_axes_from_ecef(&x_axis, &y_axis, &z_axis, origin_ecef, target_ecef);
+    /* Check if guidance start flag is set by sequencer */
+    if (!systemState.flags.guidStartFlag)
+    {
+        /* Guidance not enabled yet - return zero acceleration */
+        accel_body->x = 0.0;
+        accel_body->y = 0.0;
+        accel_body->z = 0.0;
+        systemState.guidanceState.timeToGo = 0.0;
+        return;
+    }
+
+    /* Use pre-computed Local Frame Axes (Geodetic Normal) */
+    Vector3_t *x_axis = &local_x_axis;
+    Vector3_t *y_axis = &local_y_axis;
+    Vector3_t *z_axis = &local_z_axis;
 
     /* Convert projectile ECEF to local frame */
     Vector3_t r_m_local, v_m_local;
-    ecef_to_local_using_axes(&r_m_local, position_ecef, origin_ecef, &x_axis, &y_axis, &z_axis);
+    ecef_to_local_using_axes(&r_m_local, position_ecef, origin_ecef, x_axis, y_axis, z_axis);
 
     /* Convert velocity to local frame */
     double dot_x, dot_y, dot_z;
-    vector3_dot(&dot_x, &x_axis, velocity_ecef);
-    vector3_dot(&dot_y, &y_axis, velocity_ecef);
-    vector3_dot(&dot_z, &z_axis, velocity_ecef);
+    vector3_dot(&dot_x, x_axis, velocity_ecef);
+    vector3_dot(&dot_y, y_axis, velocity_ecef);
+    vector3_dot(&dot_z, z_axis, velocity_ecef);
     v_m_local.x = dot_x;
     v_m_local.y = dot_y;
     v_m_local.z = dot_z;
 
     /* Convert target to local frame */
     Vector3_t r_t_local;
-    ecef_to_local_using_axes(&r_t_local, target_ecef, origin_ecef, &x_axis, &y_axis, &z_axis);
+    ecef_to_local_using_axes(&r_t_local, target_ecef, origin_ecef, x_axis, y_axis, z_axis);
 
     /* Vector to target FROM projectile */
     Vector3_t r_vec;
@@ -449,8 +450,13 @@ void calculate_guidance_acceleration(Vector3_t *accel_body,
         cos_sigma = -1.0;
     double sigma = acos(cos_sigma);
 
-    /* Time to go */
-    double cos_sigma_safe = (cos_sigma > GUID_EPSILON) ? cos_sigma : GUID_EPSILON;
+    /* Time to go - protect against division by near-zero cos(sigma) */
+    double cos_sigma_safe = cos_sigma;
+    if (fabs(cos_sigma) < GUID_EPSILON)
+    {
+        /* Lead angle near 90 degrees - use small value with correct sign */
+        cos_sigma_safe = (cos_sigma >= 0.0) ? GUID_EPSILON : -GUID_EPSILON;
+    }
     double t_go = r / (v * cos_sigma_safe);
 
     /* Update System State */
@@ -515,8 +521,8 @@ void calculate_guidance_acceleration(Vector3_t *accel_body,
     double cos_theta_f = cos(theta_f);
     double sin_psi_f = sin(psi_f);
     double cos_psi_f = cos(psi_f);
-    e_f.x = cos_theta_f * sin_psi_f; /* East */
-    e_f.y = cos_theta_f * cos_psi_f; /* North */
+    e_f.x = cos_theta_f * cos_psi_f; /* North (matches reference guidance.c) */
+    e_f.y = cos_theta_f * sin_psi_f; /* East */
     e_f.z = sin_theta_f;             /* Up */
 
     /* Impact angle error */
@@ -673,7 +679,7 @@ void major_cycle(void)
     process_gnss_ecef_data();
 
     /* Step 3: Execute guidance algorithm */
-    if (gnss_position_ecef.valid && gnss_velocity_ecef.valid)
+    if (gnss_position_ecef.valid && gnss_velocity_ecef.valid && systemState.flags.guidStartFlag)
     {
         Vector3_t position_ecef;
         position_ecef.x = gnss_position_ecef.x_m;

@@ -22,6 +22,10 @@
 // Global system state (extern declared in system_state.h)
 extern SystemState_t systemState;
 
+// FSW cycle functions
+void minor_cycle(void); /* 100Hz - Navigation, Sequencer, DAP */
+void major_cycle(void); /* 10Hz - Guidance */
+
 // CSV line buffer
 #define LINE_BUFFER_SIZE 1024
 
@@ -109,6 +113,9 @@ void log_outputs(FILE *output_file, double mission_time,
             systemState.guidanceState.accelCmdBody.y,
             systemState.guidanceState.accelCmdBody.z);
 
+    /* Time-to-go (s) */
+    fprintf(output_file, "%.3f,", systemState.guidanceState.timeToGo);
+
     /* DAP outputs - Actuator fin angles in clockwise order (radians) */
     fprintf(output_file, "%.6f,%.6f,%.6f,%.6f,",
             systemState.actuatorCommands.ActuatorC12,
@@ -141,11 +148,12 @@ void log_outputs(FILE *output_file, double mission_time,
             systemState.sequencerState.isT1Set,
             systemState.sequencerState.isT2Set,
             systemState.sequencerState.isT3Set);
-    fprintf(output_file, "%d,%d,%d,%d,",
+    fprintf(output_file, "%d,%d,%d,%d,%d,",
             systemState.flags.fsaActivateFlag,
             systemState.flags.canardDeployFlag,
             systemState.flags.canardControlFlag,
-            systemState.flags.guidStartFlag);
+            systemState.flags.guidStartFlag,
+            systemState.flags.proximitySensorFlag);
 
     /* Sequencer timing (cycles) */
     fprintf(output_file, "%u,%u,%u,%u",
@@ -165,12 +173,12 @@ void print_output_header(FILE *output_file)
     fprintf(output_file, "time,");
     fprintf(output_file, "pos_x,pos_y,pos_z,");
     fprintf(output_file, "vel_x,vel_y,vel_z,");
-    fprintf(output_file, "guid_ax,guid_ay,guid_az,");
+    fprintf(output_file, "guid_ax,guid_ay,guid_az,tgo,");
     fprintf(output_file, "dap_c12,dap_c3,dap_c6,dap_c9,");
     fprintf(output_file, "nav_roll,nav_pitch,nav_yaw,");
     fprintf(output_file, "gyro_p,gyro_q,gyro_r,roll_rate_rps,");
     fprintf(output_file, "T0,T1,T2,T3,");
-    fprintf(output_file, "fsa_flag,canard_deploy,canard_control,guid_start,");
+    fprintf(output_file, "fsa_flag,canard_deploy,canard_control,guid_start,proximity_flag,");
     fprintf(output_file, "main_cycles,t1_cycles,t2_cycles,t3_cycles");
     fprintf(output_file, "\n");
 }
@@ -236,7 +244,11 @@ int main(int argc, char *argv[])
     systemState.sequencerState.isOBCReset = true;
     systemState.sequencerState.isT0Set = true; /* CRITICAL: Start in T0 phase */
 
+    /* Enable test mode to bypass hardware processing */
+    systemState.testMode = true;
+
     printf("OBC reset triggered - Mission starting in T0 phase\n");
+    printf("Test mode enabled - bypassing hardware processing\n");
     printf("Processing CSV lines...\n\n");
 
     /* Process each CSV line */
@@ -274,7 +286,7 @@ int main(int argc, char *argv[])
         minor_cycle(); /* Navigation, Sequencer, DAP (100Hz) */
 
         /* Major cycle runs at 10Hz - only every 10th minor cycle */
-        if (line_count % 10 == 0)
+        if (systemState.minorCycleCount % 10 == 0)
         {
             major_cycle(); /* Guidance (10Hz) */
         }

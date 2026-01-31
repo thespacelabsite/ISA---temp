@@ -1650,7 +1650,7 @@ static void execute_dap(double dt_s)
     PYOutput_t deltap = {0.0f, 0.0f};
     PYOutput_t deltay = {0.0f, 0.0f};
 
-    if (rollRate != 0.0f)
+    if (rollRate != 0.0)
     {
         /* Roll rate is non-zero - use roll control */
         deltar = compute_delta_roll_command(rollAngle, rollRate, dapParams, dt_s);
@@ -1707,7 +1707,7 @@ Status_t set_obc_reset(bool isActive)
         systemState.flags.isT0Set = true;
 
         /* Load PEFCS default parameters into system state */
-        
+
         load_pefcs_defaults();
 
         /* Initialize accelerometer data processing */
@@ -1847,34 +1847,53 @@ void minor_cycle(void)
 {
     double dt_s = INTEGRATION_STEP_SIZE;
 
-    /* 0. Sensor health check */
-    check_sensor_health();
+    /* Hardware sensor processing - ONLY for real hardware mode */
+    if (!systemState.testMode)
+    {
+        /* 0. Sensor health check */
+        check_sensor_health();
 
-    /* 1. Accelerometer data processing */
-    process_accelerometer_data();
+        /* 1. Accelerometer data processing */
+        process_accelerometer_data();
 
-    /* 2. Gyroscope data processing */
-    process_gyroscope_data();
+        /* 2. Gyroscope data processing */
+        process_gyroscope_data();
 
-    /* 3. Magnetometer data processing */
-    process_magnetometer_data();
+        /* 3. Magnetometer data processing */
+        process_magnetometer_data();
 
-    /* 4. Incremental velocity data processing */
-    process_incremental_velocity_data();
+        /* 4. Incremental velocity data processing */
+        process_incremental_velocity_data();
 
-    /* 5. Incremental angle data processing */
-    process_incremental_angle_data();
+        /* 5. Incremental angle data processing */
+        process_incremental_angle_data();
+    }
+    else
+    {
+        /* Test mode: Data is directly injected by test harness */
+        /* Compute derived values that are always needed */
 
-    /* 6. Navigation processing */
+        /* Calculate angular rates for DAP (rad/s) */
+        systemState.angularRates.x = systemState.gyroscopeData.gyro_current.x; /* Roll rate */
+        systemState.angularRates.y = systemState.gyroscopeData.gyro_current.y; /* Pitch rate */
+        systemState.angularRates.z = systemState.gyroscopeData.gyro_current.z; /* Yaw rate */
+
+        /* Calculate roll rate in rps (revolutions per second) for sequencer */
+        /* Convert from rad/s to rps: rps = (rad/s) / (2*PI) */
+        double roll_rate_rad_s = systemState.gyroscopeData.gyro_current.x;
+        systemState.rollRateFp = fabs(roll_rate_rad_s / (2.0 * MATH_PI));
+    }
+
+    /* 6. Navigation processing (ALWAYS runs) */
     process_navigation(dt_s);
 
-    /* 7. DAP processing - Execute Digital Autopilot */
+    /* 7. DAP processing - Execute Digital Autopilot (ALWAYS runs) */
     /* DAP reads guidance commands from systemState.guidanceState.accelCmdBody.y and accelCmdBody.z */
     /* Guidance updates at 10Hz (major cycle), DAP executes at 100Hz (minor cycle) */
     /* DAP will use the same guidance command for 10 consecutive cycles until guidance updates */
     execute_dap(dt_s);
 
-    /* 8. Sequencer processing - Execute Sequencer */
+    /* 8. Sequencer processing - Execute Sequencer (ALWAYS runs) */
     /* Sequencer reads rollRateFp from systemState.rollRateFp (in rps) */
     /* Sequencer reads timeToGo from systemState.guidanceState.timeToGo (in seconds, double) */
     /* Sequencer uses timeToGo for T3 phase transition logic (t_go < proximity threshold) */

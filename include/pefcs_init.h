@@ -95,8 +95,8 @@
  * Reference point for local coordinate transformations
  * Reference: test/guidance_updated_clamp/guidance_test.c
  */
-#define PEFCS_ORIGIN_LAT_DEG 8.529175797045042
-#define PEFCS_ORIGIN_LON_DEG 76.88543289537785
+#define PEFCS_ORIGIN_LAT_DEG 8.67176
+#define PEFCS_ORIGIN_LON_DEG 76.8854
 #define PEFCS_ORIGIN_ALT_M 0.0
 
 /**
@@ -106,7 +106,7 @@
  * psi_f: Impact azimuth angle (0.0 degrees)
  * Reference: test/guidance_updated_clamp/guidance_test.c
  */
-#define PEFCS_IMPACT_THETA_F_DEG -73.0
+#define PEFCS_IMPACT_THETA_F_DEG -65.0
 #define PEFCS_IMPACT_PSI_F_DEG 0.0
 
 /* ===== DAP (DIGITAL AUTOPILOT) INITIALIZATION PARAMETERS ===== */

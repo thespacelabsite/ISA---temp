@@ -28,12 +28,12 @@
 #define SEQ_ROLL_RATE_T2_THRESHOLD 2.0 /* Roll rate threshold for T2: 2.0 rps */
 
 // Sequencer Timing Configuration (in cycles, 1 cycle = 10ms = 0.01s)
-#define SEQ_T1_WINDOW_IN_TIME 10U    /* T1 window starts at T0 + 0.1s (10 cycles) */
-#define SEQ_T1_WINDOW_OUT_TIME 1400U /* T1 window ends at T0 + 5s (500 cycles) */
-#define SEQ_T2_WINDOW_IN_TIME 10U    /* T2 window starts at T1 + 0.1s (10 cycles) */
-#define SEQ_T2_WINDOW_OUT_TIME 500U  /* T2 window ends at T1 + 5s (500 cycles) */
-#define SEQ_T3_WINDOW_IN_TIME 10U    /* T3 window starts at T2 + 0.1s (10 cycles) */
-#define SEQ_T3_WINDOW_OUT_TIME 4800U /* T3 window ends at T2 + 5s (500 cycles) */
+#define SEQ_T1_WINDOW_IN_TIME 10U     /* T1 window starts at T0 + 0.1s (10 cycles) */
+#define SEQ_T1_WINDOW_OUT_TIME 1400U  /* T1 window ends at T0 + 5s (500 cycles) */
+#define SEQ_T2_WINDOW_IN_TIME 10U     /* T2 window starts at T1 + 0.1s (10 cycles) */
+#define SEQ_T2_WINDOW_OUT_TIME 1000U  /* T2 window ends at T1 + 5s (500 cycles) */
+#define SEQ_T3_WINDOW_IN_TIME 10U     /* T3 window starts at T2 + 0.1s (10 cycles) */
+#define SEQ_T3_WINDOW_OUT_TIME 48000U /* T3 window ends at T2 + 5s (500 cycles) */
 
 // Sequencer Timing Configuration (in seconds)
 #define SEQ_T_PROXIMITY 3.5
@@ -41,7 +41,7 @@
 #define SEQ_CANARD_DEPLOY_FLAG_DELAY 0U     /* Delay for canard deploy flag */
 #define SEQ_CANARD_CONTROL_ON_FLAG_DELAY 0U /* Delay for canard control flag */
 #define SEQ_FSA_FLAG_DELAY 0U               /* Delay for FSA flag */
-#define SEQ_GUID_START_FLAG_DELAY 100U      /* Delay for guidance start flag (2.0s) */
+#define SEQ_GUID_START_FLAG_DELAY 0U        /* Delay for guidance start flag (2.0s) */
 
 // Sensor Health Status type (must be defined before NavigationState_t uses it)
 typedef uint16_t SensorHealthStatus_t;
