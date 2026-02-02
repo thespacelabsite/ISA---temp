@@ -56,11 +56,12 @@ run: $(TARGET)
 	@$(TARGET)
 
 # Clean build artifacts
+# Using 'rm' which works in most shells (including Git Bash/sh that usually ships with make)
 clean:
-	@echo "Cleaning build directory..."
-	@cmd /c "if exist $(BUILD_DIR) rmdir /s /q $(BUILD_DIR)"
-	@cmd /c "if exist $(TARGET) del /q $(TARGET)"
-	@cmd /c "if exist fsw_output.csv del /q fsw_output.csv"
+	@echo "Cleaning build directory and artifacts..."
+	-rm -rf $(BUILD_DIR)
+	-rm -f $(TARGET)
+	-rm -f fsw_output.csv
 	@echo "Clean complete"
 
 # Phony targets
