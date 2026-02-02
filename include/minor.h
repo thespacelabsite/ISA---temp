@@ -28,12 +28,12 @@
 #define SEQ_ROLL_RATE_T2_THRESHOLD 2.0 /* Roll rate threshold for T2: 2.0 rps */
 
 // Sequencer Timing Configuration (in cycles, 1 cycle = 10ms = 0.01s)
-#define SEQ_T1_WINDOW_IN_TIME 10U     /* T1 window starts at T0 + 0.1s (10 cycles) */
-#define SEQ_T1_WINDOW_OUT_TIME 1400U  /* T1 window ends at T0 + 5s (500 cycles) */
-#define SEQ_T2_WINDOW_IN_TIME 10U     /* T2 window starts at T1 + 0.1s (10 cycles) */
-#define SEQ_T2_WINDOW_OUT_TIME 1000U  /* T2 window ends at T1 + 5s (500 cycles) */
-#define SEQ_T3_WINDOW_IN_TIME 10U     /* T3 window starts at T2 + 0.1s (10 cycles) */
-#define SEQ_T3_WINDOW_OUT_TIME 48000U /* T3 window ends at T2 + 5s (500 cycles) */
+#define SEQ_T1_WINDOW_IN_TIME 10U    /* T1 window starts at T0 + 0.1s (10 cycles) */
+#define SEQ_T1_WINDOW_OUT_TIME 1400U /* T1 window ends at T0 + 5s (500 cycles) */
+#define SEQ_T2_WINDOW_IN_TIME 10U    /* T2 window starts at T1 + 0.1s (10 cycles) */
+#define SEQ_T2_WINDOW_OUT_TIME 1000U /* T2 window ends at T1 + 5s (500 cycles) */
+#define SEQ_T3_WINDOW_IN_TIME 10U    /* T3 window starts at T2 + 0.1s (10 cycles) */
+#define SEQ_T3_WINDOW_OUT_TIME 4800U /* T3 window ends at T2 + 5s (500 cycles) */
 
 // Sequencer Timing Configuration (in seconds)
 #define SEQ_T_PROXIMITY 3.5
@@ -141,8 +141,6 @@ typedef struct
     double phi_min_rad;         /* Roll angle min limit in radians */
     double phi_max_rad;         /* Roll angle max limit in radians */
     /* Pitch controller constants */
-    double ks_pitch;            /* Proportional gain for pitch (mapped from kp) */
-    double ka_pitch;            /* Acceleration gain for pitch (mapped from ka) */
     double kp_pitch;            /* Proportional gain for pitch */
     double ki_pitch;            /* Integrator gain for pitch */
     double kr_pitch;            /* Rate gain for pitch */
@@ -155,8 +153,6 @@ typedef struct
     double integratorP_min_rad; /* Integrator min limit in radians for pitch */
     double integratorP_max_rad; /* Integrator max limit in radians for pitch */
     /* Yaw controller constants */
-    double ks_yaw;              /* Proportional gain for yaw */
-    double ka_yaw;              /* Acceleration gain for yaw */
     double kp_yaw;              /* Proportional gain for yaw */
     double ki_yaw;              /* Integrator gain for yaw */
     double kr_yaw;              /* Rate gain for yaw */
@@ -168,7 +164,6 @@ typedef struct
     double psi_max_rad;         /* Yaw angle max limit in radians */
     double integratorY_min_rad; /* Integrator min limit in radians for yaw */
     double integratorY_max_rad; /* Integrator max limit in radians for yaw */
-    double imu_cg_distance_m;   /* Distance between IMU and CG in meters */
 } DapParams_t;
 
 // DAP Output structure for canard deflection commands

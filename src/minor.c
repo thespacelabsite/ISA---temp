@@ -661,11 +661,11 @@ void load_pefcs_defaults(void)
     systemState.dapParams.ki_roll = PEFCS_DAP_KI_ROLL;
     systemState.dapParams.kr_roll = PEFCS_DAP_KR_ROLL;
 
-    /* Roll Controller Limits (Hardcoded internal constants) */
-    systemState.dapParams.integratorR_min_rad = -0.1745;
-    systemState.dapParams.integratorR_max_rad = 0.1745;
-    systemState.dapParams.phi_min_rad = -0.014677;
-    systemState.dapParams.phi_max_rad = 0.014677;
+    /* Roll Controller Limits (from PEFCS) */
+    systemState.dapParams.integratorR_min_rad = PEFCS_DAP_INTEGRATOR_R_MIN;
+    systemState.dapParams.integratorR_max_rad = PEFCS_DAP_INTEGRATOR_R_MAX;
+    systemState.dapParams.phi_min_rad = PEFCS_DAP_PHI_MIN;
+    systemState.dapParams.phi_max_rad = PEFCS_DAP_PHI_MAX;
 
     /* Pitch Controller Gains & Filter Params (from PEFCS) */
     systemState.dapParams.kp_pitch = PEFCS_DAP_KP_PITCH;
@@ -676,11 +676,11 @@ void load_pefcs_defaults(void)
     systemState.dapParams.pitch_a = PEFCS_DAP_PITCH_A;
     systemState.dapParams.pitch_b = PEFCS_DAP_PITCH_B;
 
-    /* Pitch Controller Limits (Hardcoded internal constants) */
-    systemState.dapParams.theta_min_rad = -0.014677;
-    systemState.dapParams.theta_max_rad = 0.014677;
-    systemState.dapParams.integratorP_min_rad = -0.08726;
-    systemState.dapParams.integratorP_max_rad = 0.08726;
+    /* Pitch Controller Limits (from PEFCS) */
+    systemState.dapParams.theta_min_rad = PEFCS_DAP_THETA_MIN;
+    systemState.dapParams.theta_max_rad = PEFCS_DAP_THETA_MAX;
+    systemState.dapParams.integratorP_min_rad = PEFCS_DAP_INTEGRATOR_P_MIN;
+    systemState.dapParams.integratorP_max_rad = PEFCS_DAP_INTEGRATOR_P_MAX;
 
     /* Yaw Controller Gains & Filter Params (from PEFCS) */
     systemState.dapParams.kp_yaw = PEFCS_DAP_KP_YAW;
@@ -691,14 +691,11 @@ void load_pefcs_defaults(void)
     systemState.dapParams.yaw_a = PEFCS_DAP_YAW_A;
     systemState.dapParams.yaw_b = PEFCS_DAP_YAW_B;
 
-    /* Yaw Controller Limits (Hardcoded internal constants) */
-    systemState.dapParams.psi_min_rad = -0.014677;
-    systemState.dapParams.psi_max_rad = 0.014677;
-    systemState.dapParams.integratorY_min_rad = -0.08726;
-    systemState.dapParams.integratorY_max_rad = 0.08726;
-
-    /* IMU to CG distance - using default value (TODO: add to PEFCS if needed) */
-    systemState.dapParams.imu_cg_distance_m = 0.0; /* Default: IMU at CG */
+    /* Yaw Controller Limits (from PEFCS) */
+    systemState.dapParams.psi_min_rad = PEFCS_DAP_PSI_MIN;
+    systemState.dapParams.psi_max_rad = PEFCS_DAP_PSI_MAX;
+    systemState.dapParams.integratorY_min_rad = PEFCS_DAP_INTEGRATOR_Y_MIN;
+    systemState.dapParams.integratorY_max_rad = PEFCS_DAP_INTEGRATOR_Y_MAX;
 
     /* ===== SEQUENCER PARAMETERS ===== */
     /* Sequencer timing constants are already defined in minor.h */
@@ -1412,11 +1409,11 @@ static const double integratorY_max_rad = 0.08726;  /* Integrator max limit in r
  * @param rollAngle_rad Current roll angle in radians
  * @param rollRate_radps Current roll rate in rad/s
  * @param dapParams DAP controller parameters
- * @param timeStep_s Time step in seconds
+ * @param dt_s Time step in seconds
  * @return DAPOutput_t Roll control command
  */
 static DAPOutput_t compute_delta_roll_command(double rollAngle_rad, double rollRate_radps,
-                                              const DapParams_t *dapParams, double timeStep_s)
+                                              const DapParams_t *dapParams, double dt_s)
 {
     double phiCommand = 0.0; /* Roll command is zero (maintain zero roll) */
     double phiErr = phiCommand - rollAngle_rad;
@@ -1447,7 +1444,7 @@ static DAPOutput_t compute_delta_roll_command(double rollAngle_rad, double rollR
     deltaCommandRoll = (dapParams->kp_roll * out) + rollIntegrator;
 
     /* Update integrator with anti-windup */
-    integratorValue = integratorValue + ((out * dapParams->ki_roll) * timeStep_s);
+    integratorValue = integratorValue + ((out * dapParams->ki_roll) * dt_s);
     if (integratorValue > dapParams->integratorR_max_rad)
     {
         integratorValue = dapParams->integratorR_max_rad;
@@ -1458,10 +1455,10 @@ static DAPOutput_t compute_delta_roll_command(double rollAngle_rad, double rollR
     }
     rollIntegrator = integratorValue;
 
+    result.delta12_rad = deltaCommandRoll;
     result.delta3_rad = deltaCommandRoll;
     result.delta6_rad = deltaCommandRoll;
     result.delta9_rad = deltaCommandRoll;
-    result.delta12_rad = deltaCommandRoll;
 
     return result;
 }
@@ -1473,11 +1470,11 @@ static DAPOutput_t compute_delta_roll_command(double rollAngle_rad, double rollR
  * @param pitchRate_radps Current pitch rate in rad/s
  * @param accelerationYCommand_mps2 Commanded Y-axis acceleration in m/s^2
  * @param dapParams DAP controller parameters
- * @param timeStep_s Time step in seconds
+ * @param dt_s Time step in seconds
  * @return PYOutput_t Pitch control command
  */
 static PYOutput_t compute_delta_pitch_command(double accelerationY_mps2, double pitchRate_radps,
-                                              double accelerationYCommand_mps2, const DapParams_t *dapParams, double timeStep_s)
+                                              double accelerationYCommand_mps2, const DapParams_t *dapParams, double dt_s)
 {
     double accErrorPitch;
     double deltaCommandPitch;
@@ -1485,7 +1482,7 @@ static PYOutput_t compute_delta_pitch_command(double accelerationY_mps2, double 
     double thetaLimit;
 
     /* Safety check for time step - prevent division by zero */
-    double safe_timeStep = timeStep_s;
+    double safe_timeStep = dt_s;
     if (safe_timeStep < MATH_EPSILON)
     {
         safe_timeStep = MATH_EPSILON;
@@ -1520,7 +1517,7 @@ static PYOutput_t compute_delta_pitch_command(double accelerationY_mps2, double 
     theta += pitchRate_radps * safe_timeStep;
 
     /* Update integrator with anti-windup */
-    double integratorValue = pitchIntegrator + ((out_Pitch * dapParams->ki_pitch) * timeStep_s);
+    double integratorValue = pitchIntegrator + ((out_Pitch * dapParams->ki_pitch) * dt_s);
     if (integratorValue > dapParams->integratorP_max_rad)
     {
         integratorValue = dapParams->integratorP_max_rad;
@@ -1543,11 +1540,11 @@ static PYOutput_t compute_delta_pitch_command(double accelerationY_mps2, double 
  * @param yawRate_radps Current yaw rate in rad/s
  * @param accelerationZCommand_mps2 Commanded Z-axis acceleration in m/s^2
  * @param dapParams DAP controller parameters
- * @param timeStep_s Time step in seconds
+ * @param dt_s Time step in seconds
  * @return PYOutput_t Yaw control command
  */
 static PYOutput_t compute_delta_yaw_command(double accelerationZ_mps2, double yawRate_radps,
-                                            double accelerationZCommand_mps2, const DapParams_t *dapParams, double timeStep_s)
+                                            double accelerationZCommand_mps2, const DapParams_t *dapParams, double dt_s)
 {
     double accErrorYaw;
     double deltaCommandYaw;
@@ -1555,7 +1552,7 @@ static PYOutput_t compute_delta_yaw_command(double accelerationZ_mps2, double ya
     double psiLimit;
 
     /* Safety check for time step - prevent division by zero */
-    double safe_timeStep = timeStep_s;
+    double safe_timeStep = dt_s;
     if (safe_timeStep < MATH_EPSILON)
     {
         safe_timeStep = MATH_EPSILON;
@@ -1590,7 +1587,7 @@ static PYOutput_t compute_delta_yaw_command(double accelerationZ_mps2, double ya
     psi += yawRate_radps * safe_timeStep;
 
     /* Update integrator with anti-windup */
-    double integratorValue = yawIntegrator + ((out_yaw * dapParams->ki_yaw) * timeStep_s);
+    double integratorValue = yawIntegrator + ((out_yaw * dapParams->ki_yaw) * dt_s);
     if (integratorValue > dapParams->integratorY_max_rad)
     {
         integratorValue = dapParams->integratorY_max_rad;
@@ -1675,19 +1672,19 @@ static void execute_dap(double dt_s)
         deltay = compute_delta_yaw_command(accelerationZ, yawRate,
                                            accelerationZCommand, dapParams, dt_s);
 
-        dapOutput.delta3_rad = deltap.delta1_rad;
-        dapOutput.delta9_rad = deltap.delta2_rad;
-        dapOutput.delta6_rad = deltay.delta1_rad;
         dapOutput.delta12_rad = deltay.delta2_rad;
+        dapOutput.delta3_rad = deltap.delta1_rad;
+        dapOutput.delta6_rad = deltay.delta1_rad;
+        dapOutput.delta9_rad = deltap.delta2_rad;
     }
 
     /* Map DAP output to actuator commands */
     /* Note: Actual canard mapping depends on hardware configuration */
     /* For now, storing individual canard deflections in actuatorCommands */
+    systemState.actuatorCommands.ActuatorC12 = dapOutput.delta12_rad; /* Canard 12 */
     systemState.actuatorCommands.ActuatorC3 = dapOutput.delta3_rad;   /* Canard 3 */
     systemState.actuatorCommands.ActuatorC6 = dapOutput.delta6_rad;   /* Canard 6 */
     systemState.actuatorCommands.ActuatorC9 = dapOutput.delta9_rad;   /* Canard 9 */
-    systemState.actuatorCommands.ActuatorC12 = dapOutput.delta12_rad; /* Canard 12 */
 }
 
 /* ===== PUBLIC FUNCTIONS ===== */
@@ -1718,97 +1715,46 @@ Status_t set_obc_reset(bool isActive)
         systemState.flags.isT0Set = true;
 
         /* Load PEFCS default parameters into system state */
-
         load_pefcs_defaults();
 
-        /* Initialize accelerometer data processing */
-        // systemState.accelerometerData.accel_current.x = 0.0;
-        // systemState.accelerometerData.accel_current.y = 0.0;
-        // systemState.accelerometerData.accel_current.z = 0.0;
-        // systemState.accelerometerData.accel_previous.x = 0.0;
-        // systemState.accelerometerData.accel_previous.y = 0.0;
-        // systemState.accelerometerData.accel_previous.z = 0.0;
-        // systemState.accelerometerData.accel_obc.x = 0.0;
-        // systemState.accelerometerData.accel_obc.y = 0.0;
-        // systemState.accelerometerData.accel_obc.z = 0.0;
-        // systemState.accelerometerData.accel_x_health_ok = false;
-        // systemState.accelerometerData.accel_y_health_ok = false;
-        // systemState.accelerometerData.accel_z_health_ok = false;
+        /* Initialize dynamic sensor data (Zeroing measurements) */
+        memset(&systemState.accelerometerData, 0, sizeof(AccelerometerData_t));
+        memset(&systemState.gyroscopeData, 0, sizeof(GyroscopeData_t));
+        memset(&systemState.magnetometerData, 0, sizeof(MagnetometerData_t));
+        memset(&systemState.incrementalVelocityData, 0, sizeof(IncrementalVelocityData_t));
+        memset(&systemState.incrementalAngleData, 0, sizeof(IncrementalAngleData_t));
 
-        /* Initialize gyroscope data processing */
-        // systemState.gyroscopeData.gyro_current.x = 0.0;
-        // systemState.gyroscopeData.gyro_current.y = 0.0;
-        // systemState.gyroscopeData.gyro_current.z = 0.0;
-        // systemState.gyroscopeData.gyro_previous.x = 0.0;
-        // systemState.gyroscopeData.gyro_previous.y = 0.0;
-        // systemState.gyroscopeData.gyro_previous.z = 0.0;
-        // systemState.gyroscopeData.gyro_obc.x = 0.0;
-        // systemState.gyroscopeData.gyro_obc.y = 0.0;
-        // systemState.gyroscopeData.gyro_obc.z = 0.0;
-        // systemState.gyroscopeData.gyro_x_health_ok = false;
-        // systemState.gyroscopeData.gyro_y_health_ok = false;
-        // systemState.gyroscopeData.gyro_z_health_ok = false;
+        /* Note: navigationState.accel_offset and mag_ref_ned are preserved 
+           because they were JUST loaded by load_pefcs_defaults() above. */
 
-        /* Initialize magnetometer data processing */
-        // systemState.magnetometerData.mag_current.x = 0.0;
-        // systemState.magnetometerData.mag_current.y = 0.0;
-        // systemState.magnetometerData.mag_current.z = 0.0;
-        // systemState.magnetometerData.mag_previous.x = 0.0;
-        // systemState.magnetometerData.mag_previous.y = 0.0;
-        // systemState.magnetometerData.mag_previous.z = 0.0;
-        // systemState.magnetometerData.mag_obc.x = 0.0;
-        // systemState.magnetometerData.mag_obc.y = 0.0;
-        // systemState.magnetometerData.mag_obc.z = 0.0;
-        // systemState.magnetometerData.mag_health_ok = false;
-
-        /* Initialize incremental velocity data processing */
-        // systemState.incrementalVelocityData.delta_v_x_raw = 0;
-        // systemState.incrementalVelocityData.delta_v_y_raw = 0;
-        // systemState.incrementalVelocityData.delta_v_z_raw = 0;
-        // systemState.incrementalVelocityData.delta_v_obc.x = 0.0;
-        // systemState.incrementalVelocityData.delta_v_obc.y = 0.0;
-        // systemState.incrementalVelocityData.delta_v_obc.z = 0.0;
-        // systemState.incrementalVelocityData.delta_v_converted.x = 0.0;
-        // systemState.incrementalVelocityData.delta_v_converted.y = 0.0;
-        // systemState.incrementalVelocityData.delta_v_converted.z = 0.0;
-
-        /* Initialize incremental angle data processing */
-        // systemState.incrementalAngleData.delta_theta_x_raw = 0;
-        // systemState.incrementalAngleData.delta_theta_y_raw = 0;
-        // systemState.incrementalAngleData.delta_theta_z_raw = 0;
-        // systemState.incrementalAngleData.delta_theta_obc.x = 0.0;
-        // systemState.incrementalAngleData.delta_theta_obc.y = 0.0;
-        // systemState.incrementalAngleData.delta_theta_obc.z = 0.0;
-
-        /* Initialize navigation confirmation flags */
-        // systemState.navigationState.accel_offset.y = 0.0; /* Set actual calibration values */
-        // systemState.navigationState.accel_offset.z = 0.0; /* Set actual calibration values */
-
-        /* Initialize navigation confirmation flags */
+        /* Initialize navigation confirmation flags and counters */
         systemState.navigationState.mag_3_cycles_confirmed = false;
         systemState.navigationState.gyro_3_cycles_confirmed = false;
-
-        /* Initialize attitude estimation tracking variables */
         magcount = 0;
         MAG_3_CYCLES_CONFIRMED = false;
         gyrocount = 0;
         gyro_3_cycles_confirmed = false;
+        gyro_rate_condition_met = false;
+        magEstOkFlag = false;
         gyroattitude = false;
         rate = 0.0;
 
-        /* Initialize magnetic field reference in NED frame (from checkout system) */
-        /* Default values match previous hardcoded values: mv = -118.196..., me = -7.420... */
-        /* For default: mag_ref_ned = [x, y, z] where after transformation: y = mv, z = me */
-        /* With matrix [1,0,0; 0,0,-1; 0,1,0], we need: y = -z_ned = mv, z = y_ned = me */
-        /* So: z_ned = -mv = 118.196..., y_ned = me = -7.420... */
-        systemState.navigationState.mag_ref_ned.x = 0.0; /* Will be set by checkout system */
-        systemState.navigationState.mag_ref_ned.y = 0.0; /* Default: matches me */
-        systemState.navigationState.mag_ref_ned.z = 0.0; /* Default: matches -mv */
+        /* Initialize DAP state variables (Integrators and Filters) */
+        rollIntegrator = 0.0;
+        pitchIntegrator = 0.0;
+        yawIntegrator = 0.0;
+        LPF_out_Pitch = 0.0;
+        lag_out_pitch = 0.0;
+        theta = 0.0;
+        LPF_out_Yaw = 0.0;
+        lag_out_yaw = 0.0;
+        psi = 0.0;
 
-        /* Initialize DAP state variables */
-        rollIntegrator = 0.0;    /* Reset roll integrator */
-        previousPitchrate = 0.0; /* Reset previous pitch rate */
-        previousYawrate = 0.0;   /* Reset previous yaw rate */
+        /* Initialize Actuator Commands to Neutral/Bias */
+        systemState.actuatorCommands.ActuatorC3 = -0.024432809773124;
+        systemState.actuatorCommands.ActuatorC6 = -0.024432809773124;
+        systemState.actuatorCommands.ActuatorC9 = -0.024432809773124;
+        systemState.actuatorCommands.ActuatorC12 = -0.024432809773124;
     }
 
     return SUCCESS;
